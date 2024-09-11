@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ReceiptStorageApp"
 include ':app'
+include ':opencv'

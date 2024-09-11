@@ -1,10 +1,9 @@
 package com.example.receiptstorageapp;
 
 
-import android.content.res.AssetManager;
+import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
-import android.os.Environment;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -14,37 +13,41 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.googlecode.tesseract.android.TessBaseAPI;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
+
+import org.opencv.android.OpenCVLoader;
+import org.opencv.android.Utils;
+import org.opencv.core.Mat;
+import org.opencv.imgproc.Imgproc;
+
 
 public class DisplayActivity extends AppCompatActivity {
 
     private RecyclerView recyclerView;
     private List<File> fileList;
     private FileAdapter fileAdapter;
-    private String extractedText;
-    File receiptStorage;
+    private File receiptStorage;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState){
         super.onCreate(savedInstanceState);
-
-        receiptStorage = getFilesDir();
-
         setContentView(R.layout.activity_display);
-
+        if (OpenCVLoader.initLocal())
+            Log.i("OPENCV", "OPENCV LOADED SUCCESSFULLY");
+        receiptStorage = getFilesDir();
         displayFiles();
-//        try {
-//            analyzeFiles(receiptStorage);
-//        } catch (IOException e) {
-//            throw new RuntimeException(e);
-//        }
+        try {
+            analyzeFiles();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
 //        Toast.makeText(this, extractedText, Toast.LENGTH_LONG).show();
     }
 
@@ -61,52 +64,42 @@ public class DisplayActivity extends AppCompatActivity {
         return arrayList;
     }
 
-    public void analyzeFiles(File folder) throws IOException {
-        File[] files = folder.listFiles();
-        TessBaseAPI ocrEngine = new TessBaseAPI();
+    public void analyzeFiles() throws IOException {
+        // file to bitmap
+        fileList = new ArrayList<>();
+        fileList.addAll(findFiles(receiptStorage));
+        String imageFilePath = fileList.get(fileList.size() - 1).getAbsolutePath();
+        Bitmap imageBitmap = BitmapFactory.decodeFile(imageFilePath);
+        Mat imageMat = new Mat();
+        assert imageBitmap != null;
+        Utils.bitmapToMat(imageBitmap, imageMat);
 
-        try {
-            copyTessDataFiles();
-        } catch (IOException e){
-            e.printStackTrace();
-        }
+        //preprocessing
+        Mat greyImage = new Mat();
+        Mat thresholdImage = new Mat();
 
-        ocrEngine.init(getFilesDir().toString(), "eng");
-        assert files != null;
-        ocrEngine.setImage(files[files.length-1]);
-        extractedText = ocrEngine.getUTF8Text();
-        ocrEngine.end();
+        //greyscaling
+        Imgproc.cvtColor(imageMat, greyImage, Imgproc.COLOR_BGR2GRAY);
 
-    }
+        //thresholding
+        Imgproc.threshold(greyImage, thresholdImage, 128, 255, Imgproc.THRESH_BINARY);
 
-    private void copyTessDataFiles() throws IOException {
-        AssetManager assetManager = getAssets();
-        String[] files = assetManager.list("tessdata");
-        assert files != null;
-        // starts input stream from assets folder
-        InputStream in = assetManager.open("tessdata/" + files[0]);
-        // creates output directory and output file
-        File bufferFolder = new File(getFilesDir() + "/tessdata/");
-        File dataFile = new File(getFilesDir() + "/tessdata/" + files[0]);
-        if (!bufferFolder.exists()){
-            bufferFolder.mkdirs();
-            dataFile.createNewFile();
-        }
-        // writes asset data to internal storage
-        OutputStream out = new FileOutputStream(dataFile);
-        copyFile(in, out);
-        in.close();
-        out.flush();
-        out.close();
-
-    }
-
-    private void copyFile(InputStream in, OutputStream out) throws IOException {
-        byte[] buffer = new byte[1024];
-        int read;
-        while ((read = in.read(buffer)) != -1) {
-            out.write(buffer, 0, read);
-        }
+        Utils.matToBitmap(thresholdImage, imageBitmap);
+        InputImage inputImage = InputImage.fromBitmap(imageBitmap, 0);
+        //text recognition
+        TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+        recognizer.process(inputImage)
+                .addOnSuccessListener(
+                        text -> {
+                            if(text != null){
+                                Log.i("EXTRACTEDTEXT", text.getText());
+                            } else Toast.makeText(this, "text found but no result", Toast.LENGTH_SHORT).show();
+                        }
+                ).addOnFailureListener(
+                        e -> {
+                            Toast.makeText(this, "text not found", Toast.LENGTH_SHORT).show();
+                        }
+                );
     }
 
     private void displayFiles(){

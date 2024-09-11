@@ -1,0 +1,2 @@
+ninja: Entering directory `C:\Users\singa\OneDrive\Documents\projects\androidProjects\ReceiptStorageApp\opencv\.cxx\Debug\45202d6u\arm64-v8a'
+ninja: no work to do.

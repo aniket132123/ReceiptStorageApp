@@ -59,9 +59,8 @@ dependencies {
     implementation "androidx.camera:camera-view:${camerax_version}"
     implementation "androidx.camera:camera-extensions:${camerax_version}"
 
-    // https://mvnrepository.com/artifact/commons-io/commons-io
     implementation group: 'commons-io', name: 'commons-io', version: '2.13.0'
-    // https://mavenlibs.com/maven/dependency/net.sourceforge.tess4j/tess4j
     implementation 'com.rmtheis:tess-two:5.4.1'
+    implementation project(':opencv')
 
 }
